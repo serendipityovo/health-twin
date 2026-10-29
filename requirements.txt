@@ -1,0 +1,21 @@
+# 康孪生 HealthTwin 依赖（Python 3.9+）
+# 框架
+langchain>=0.3,<0.4
+langchain-core>=0.3
+langchain-openai>=0.2
+langchain-ollama>=0.2
+langchain-community>=0.3
+
+# 界面与数据
+streamlit>=1.36
+pandas>=2.0
+pydantic>=2.5
+
+# RAG：向量检索（可选路径）与关键词检索（默认路径）
+faiss-cpu>=1.8,<1.9
+rank-bm25>=0.2.2
+jieba>=0.42
+
+# 工具
+python-dotenv>=1.0
+pypdf>=4.0
