@@ -139,7 +139,7 @@ def render(get_llm, get_kb):
                 try:
                     report = TwinAnalystChain(get_llm(temperature=0.4)).assess()
                 except Exception as e:
-                    st.error(f"评估失败：{e}\n\n请到「模型设置」页检查模型配置与连通性。")
+                    st.error(f"评估失败：{e}\n\n如持续出现，请稍后再试或联系管理员。")
                     st.stop()
             st.session_state.twin_report = report
         if st.session_state.get("twin_report"):

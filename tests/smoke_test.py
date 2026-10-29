@@ -42,6 +42,8 @@ def _():
 def _():
     from twin.profile import ProfileStore, HealthProfile
     store = ProfileStore()
+    backup = store.load()  # 备份已有档案（兼容演示数据）
+    store.save(HealthProfile())  # 从空档案开始，断言才确定
     store.update_fields(name="张三", sex="男", age=34, height_cm=175, weight_kg=82.5,
                         chronic_conditions=["高血压"])
     store.update_fields(chronic_conditions=["高血脂"], allergies=["青霉素"])  # 列表合并去重
@@ -51,14 +53,15 @@ def _():
     assert p.allergies == ["青霉素"]
     assert abs(p.bmi() - 26.9) < 0.1, p.bmi()
     assert 0 < p.completeness() <= 1
-    # 清理测试数据
-    ProfileStore().save(HealthProfile())
+    store.save(backup)  # 恢复原有档案
 
 
 @check("指标存储：记录 / DataFrame / 趋势摘要")
 def _():
     from twin.metrics import MetricStore
     store = MetricStore()
+    backup = store._load_raw()  # 备份已有指标（兼容演示数据）
+    store._save_raw([])
     store.add("systolic", 135, "2026-09-01", "")
     store.add("systolic", 148, "2026-10-01", "晨起")
     store.add("sleep_hours", 6.0, "2026-10-01", "")
@@ -66,8 +69,7 @@ def _():
     assert len(df) == 3
     summary = store.summary()
     assert "收缩压" in summary and "148" in summary and "↑" in summary, summary
-    # 清理
-    store._save_raw([])
+    store._save_raw(backup)  # 恢复原有指标
 
 
 @check("病历与报告存储")
@@ -75,10 +77,11 @@ def _():
     from twin.records import save_record, list_records, delete_record, save_report, list_reports, delete_report
     rec = save_record("### 主诉\n发热咳嗽三天", title="测试病历")
     rep = save_report("test.txt", "血常规：WBC 11.2↑", analysis="白细胞升高")
-    assert list_records()[0]["id"] == rec["id"]
-    assert list_reports()[0]["id"] == rep["id"]
+    assert any(r["id"] == rec["id"] for r in list_records())
+    assert any(r["id"] == rep["id"] for r in list_reports())
     delete_record(rec["id"]); delete_report(rep["id"])
-    assert not list_records() and not list_reports()
+    assert not any(r["id"] == rec["id"] for r in list_records())
+    assert not any(r["id"] == rep["id"] for r in list_reports())
 
 
 @check("孪生上下文构建")
@@ -118,23 +121,23 @@ def _():
 def _():
     from core.llm import get_chat_model
     import config
-    old_provider, old_key = config.LLM_PROVIDER, config.ONLINE_API_KEY
+    old_provider, old_key = config.LLM_PROVIDER, config.DEEPSEEK_API_KEY
     try:
         # 未配置 Key 时应给出清晰中文错误
-        config.LLM_PROVIDER, config.ONLINE_API_KEY = "online", ""
+        config.LLM_PROVIDER, config.DEEPSEEK_API_KEY = "online", ""
         try:
             get_chat_model()
             raise AssertionError("未配置 Key 应抛出 ValueError")
         except ValueError:
             pass
-        config.ONLINE_API_KEY = "sk-test"
+        config.DEEPSEEK_API_KEY = "sk-test"
         m2 = get_chat_model()
         assert type(m2).__name__ == "ChatOpenAI"
         config.LLM_PROVIDER = "ollama"
         m1 = get_chat_model()
         assert type(m1).__name__ == "ChatOllama"
     finally:
-        config.LLM_PROVIDER, config.ONLINE_API_KEY = old_provider, old_key
+        config.LLM_PROVIDER, config.DEEPSEEK_API_KEY = old_provider, old_key
 
 
 @check("结构化输出降级解析 extract_json")

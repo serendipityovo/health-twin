@@ -1,0 +1,7 @@
+# Streamlit 主题配置（重启服务后生效）
+[theme]
+base = "light"
+primaryColor = "#2563EB"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F5F7FA"
+textColor = "#1F2937"

@@ -1,6 +1,6 @@
 # 🏥 康孪生 HealthTwin
 
-**基于数字孪生的健康管理系统** —— 一款基于 **LangChain 框架**开发、支持**在线大模型 / 离线大模型**双模式的智能健康管理应用。
+**基于数字孪生的健康管理系统** —— 一款基于 **LangChain 框架**开发的智能健康管理应用：内置 DeepSeek 最新模型、用户零配置零密钥，开箱即用（开发者可切换离线大模型）。
 
 > 数字孪生健康档案 × AI 智能分析 × 智能就医匹配
 > 打通「数据采集 → 数字建模 → 智能分析 → 精准服务 → 就医衔接」的全周期健康管理闭环
@@ -18,8 +18,8 @@
 - [系统架构](#系统架构)
 - [LangChain 技术要点](#langchain-技术要点)
 - [快速开始](#快速开始)
-  - [方式一：在线大模型（推荐，5分钟跑通）](#方式一在线大模型推荐)
-  - [方式二：离线大模型（Ollama，数据不出本机）](#方式二离线大模型ollama)
+  - [开通 AI（部署者做一次，约 2 分钟）](#开通-ai部署者做一次约-2-分钟)
+  - [开发者：自定义模型 / 离线部署（可选）](#开发者自定义模型--离线部署可选)
 - [配置说明](#配置说明)
 - [使用指南](#使用指南)
 - [目录结构](#目录结构)
@@ -34,6 +34,8 @@
 ## 项目简介
 
 现有健康管理产品普遍停留在「数据记录 + 简单提醒」层面，技术应用浅、功能碎片化，且缺少健康数据与就医服务的衔接闭环。**康孪生 HealthTwin** 以「数字孪生」为核心概念，为每位用户构建一个随数据持续更新的**个人健康数字孪生体**，并用 LangChain 编排大模型能力，围绕孪生体提供个性化分析与就医指导。
+
+**面向普通用户零门槛设计**：AI 模型内置为 DeepSeek 最新模型（`deepseek-chat`），部署者在后台 `.env` 填一次密钥即可，用户界面不出现任何模型、密钥、参数概念；需要自定义模型或离线部署时，开发者可通过 `DEV_MODE=1` 打开隐藏的「🛠 开发者选项」。
 
 系统三大核心模块（对应《基于数字孪生概念的健康管理系统》项目规划）：
 
@@ -69,9 +71,9 @@
 - 输入症状 → 本地知识库确定性命中 + LLM 结构化分析
 - 输出：紧急程度（常规/尽快/⚠️紧急）、推荐科室 Top3（含理由）、红旗警示信号、就诊准备清单、建议咨询医生的问题
 
-### ⚙️ 模型设置
-- 图形化切换**在线 API / Ollama 离线**模式，内置智谱 GLM / DeepSeek / OpenAI / wisediag 预设
-- 一键连通性测试、RAG 知识库状态查看
+### 🛠 开发者选项（默认隐藏）
+- 普通用户界面**零配置零密钥**：AI 内置 DeepSeek 最新模型，开箱即用
+- `.env` 设 `DEV_MODE=1` 后导航出现「🛠 开发者选项」：自定义任意 OpenAI 兼容模型 / 切换 Ollama 离线 / 连通性测试 / RAG 状态
 
 ## 系统架构
 
@@ -83,7 +85,8 @@ flowchart TB
         V3["📄 报告解读"]
         V4["🧬 孪生档案"]
         V5["🏥 就医匹配"]
-        V6["⚙️ 模型设置"]
+        V6["🛠 开发者选项
+(DEV_MODE)"]
     end
 
     subgraph AGENTS["🔗 LangChain 业务链 (agents/, LCEL)"]
@@ -146,70 +149,55 @@ flowchart TB
 ### 环境要求
 
 - Python **3.9+**
-- （离线模式）[Ollama](https://ollama.com) 已安装
 
-### 安装
+### 安装与启动
 
 ```bash
-git clone <本仓库地址>
+git clone https://github.com/serendipityovo/health-twin.git
 cd health-twin
 pip install -r requirements.txt
 ```
 
-### 方式一：在线大模型（推荐）
+### 开通 AI（部署者做一次，约 2 分钟）
 
-使用任意 **OpenAI 兼容接口**。默认预设为智谱 GLM（`glm-4-flash` 有免费额度，去 [智谱开放平台](https://open.bigmodel.cn) 申请 API Key）：
+AI 已内置 **DeepSeek 最新模型**（`deepseek-chat`，自动跟随官方升级），只需配置一次密钥：
 
 ```bash
 cp .env.example .env
-# 编辑 .env：
-#   ONLINE_API_KEY=你的Key
+# 编辑 .env，填入一行：
+#   DEEPSEEK_API_KEY=sk-xxxx（到 platform.deepseek.com 注册 → API keys → 创建）
 streamlit run app.py
 ```
 
-也支持 DeepSeek、OpenAI、原课设 wisediag 等，改 `.env` 里的 `ONLINE_BASE_URL` / `ONLINE_MODEL` 即可；或在应用内「⚙️ 模型设置」页图形化配置。
+> 也可直接设置系统环境变量 `DEEPSEEK_API_KEY`，效果相同。
+> 之后**使用者什么都不用配**：打开网页即可用，界面不含任何模型/密钥选项。
 
-> 想要体验 `examples/sample_report.txt` 示例体检报告？进入「📄 检查报告解读」页粘贴其内容即可。
+> Windows 用户可双击 `run.bat` 一键启动。
+> 想体验报告解读？把 `examples/sample_report.txt` 的内容粘贴到「📄 检查报告解读」页即可。
 
-### 方式二：离线大模型（Ollama）
+### 开发者：自定义模型 / 离线部署（可选）
 
-数据完全不出本机：
+在 `.env` 中设置 `DEV_MODE=1`，导航会出现「🛠 开发者选项」页，可图形化配置：
 
-```bash
-# 1. 安装 Ollama 后拉取模型（任选其一，首次约 4.7GB）
-ollama pull qwen2.5:7b
-# ollama pull llama3.1:8b
-# ollama pull glm4:9b
-
-# 2. 配置 .env
-#   LLM_PROVIDER=ollama
-#   OLLAMA_MODEL=qwen2.5:7b
-
-# 3. 启动
-streamlit run app.py
-```
-
-> Windows 用户可直接双击 `run.bat` 一键安装依赖并启动。
+- **任意 OpenAI 兼容 API**（智谱 GLM / OpenAI / 本地 vLLM 等）：改 `ONLINE_BASE_URL` + `ONLINE_MODEL`
+- **Ollama 完全离线**：`LLM_PROVIDER=ollama`（先 `ollama pull qwen2.5:7b`，数据不出本机）
 
 ## 配置说明
 
-`.env`（或应用内「模型设置」页）全部配置项：
+普通部署只需关心前两项，其余为开发者高级选项：
 
 | 变量 | 默认值 | 说明 |
 | --- | --- | --- |
-| `LLM_PROVIDER` | `online` | `online`（在线 API）/ `ollama`（离线本地） |
-| `ONLINE_BASE_URL` | 智谱 | 任意 OpenAI 兼容接口地址 |
-| `ONLINE_API_KEY` | — | 在线模式必填 |
-| `ONLINE_MODEL` | `glm-4-flash` | 模型名 |
-| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama 服务地址 |
-| `OLLAMA_MODEL` | `qwen2.5:7b` | 本地模型名 |
-| `EMBEDDING_BASE_URL` | 空（用 BM25） | 配置后启用 FAISS 语义检索 |
-| `EMBEDDING_MODEL` | 空 | 向量模型名（在线如 `embedding-2`；Ollama 模式自动用 `nomic-embed-text`） |
-| `TEMPERATURE` | `0.7` | 生成温度 |
-| `MAX_TOKENS` | `2048` | 最大生成 token |
+| `DEEPSEEK_API_KEY` | 空（必填） | DeepSeek 密钥，部署者填一次，用户无感 |
+| `DEV_MODE` | `0` | `1` = 显示「🛠 开发者选项」页（自定义模型/密钥/测试） |
+| `ONLINE_BASE_URL` | DeepSeek 官方 | 覆盖为其它 OpenAI 兼容接口 |
+| `ONLINE_MODEL` | `deepseek-chat` | 模型名（始终指向 DeepSeek 最新 V3 系列） |
+| `LLM_PROVIDER` | `online` | 改为 `ollama` 切换离线模式 |
+| `OLLAMA_BASE_URL` / `OLLAMA_MODEL` | 本机 / qwen2.5:7b | Ollama 离线模式参数 |
+| `TEMPERATURE` / `MAX_TOKENS` | `0.7` / `2048` | 生成参数 |
 | `RETRIEVER_TOP_K` | `4` | RAG 检索条数 |
 
-**RAG 双引擎说明**：配置了向量模型 → FAISS 语义检索；未配置或不可达 → **自动降级 BM25 关键词检索**（jieba 分词），无需任何外部服务，离线环境同样具备 RAG 能力。
+**RAG 说明**：默认使用 BM25 关键词检索（jieba 分词），零外部依赖、离线可用；Ollama 模式下自动尝试 FAISS 向量检索（`nomic-embed-text`），失败自动降级 BM25。
 
 ## 使用指南
 
@@ -223,9 +211,9 @@ streamlit run app.py
 
 截图速览：
 
-| 数字孪生指标趋势 | 智能就医匹配 | 模型设置 |
+| 数字孪生指标趋势 | 智能就医匹配（真实输出） | 开发者选项（DEV_MODE） |
 | --- | --- | --- |
-| ![指标趋势](docs/screenshots/01-twin-metrics.png) | ![就医匹配](docs/screenshots/03-care-match.png) | ![模型设置](docs/screenshots/04-settings.png) |
+| ![指标趋势](docs/screenshots/01-twin-metrics.png) | ![就医匹配](docs/screenshots/03-care-match.png) | ![开发者选项](docs/screenshots/04-settings.png) |
 
 ## 目录结构
 
@@ -266,7 +254,8 @@ health-twin/
 ## 数据与隐私
 
 - 所有健康数据（档案 / 指标 / 病历 / 报告）均以 JSON 形式保存在**本机 `data/` 目录**，不上传任何服务器
-- 离线模式（Ollama）下，连模型推理都在本地完成，**数据完全不出本机**
+- AI 由 DeepSeek 官方 API 提供：仅在你主动发起提问/问诊/解读时，问题及**相关的档案摘录**会发送给 DeepSeek 生成回答；档案与病历原件始终只存在本机
+- 切换 Ollama 离线模式（开发者选项）后，模型推理也完全在本地，**数据不出本机**
 - `.env` 与 `data/` 均已加入 `.gitignore`，不会被误提交
 
 ## 运行测试
@@ -284,7 +273,8 @@ python tests/smoke_test.py
 | 维度 | 原课设版本 | 本版本 |
 | --- | --- | --- |
 | 框架 | OpenAI SDK 直接调用 | **LangChain 0.3**（LCEL / Prompt / RAG / 结构化输出） |
-| 模型 | 仅 wisediag 在线 API | 在线任意 OpenAI 兼容 API + **Ollama 离线**，图形化切换 |
+| 模型 | 仅 wisediag 在线 API，用户需配 Key | **内置 DeepSeek 最新模型，用户零配置零密钥**；开发者模式可自定义模型 / Ollama 离线 |
+| 界面 | Streamlit 默认深色 | 白底医疗产品风格：Hero 横幅、胶囊导航、卡片化组件 |
 | 检索 | 无（把 PDF 全文塞进消息） | **RAG**：FAISS 向量检索 / BM25 关键词检索自动切换 |
 | 档案 | 无持久化健康档案 | **数字孪生体**：档案 + 指标时序 + 趋势图 + 评估报告，本地持久化 |
 | 病历 | 手动生成、存 txt | 问诊 → 病历 → **结构化抽取自动同步档案** → 自动入 RAG 知识库 |

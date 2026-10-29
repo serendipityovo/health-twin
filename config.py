@@ -1,9 +1,9 @@
 """
 康孪生 HealthTwin 全局配置
 
-支持两种模型接入方式（在 .env 或「模型设置」页面中配置）：
-  1. online : 任意 OpenAI 兼容在线大模型（智谱 GLM / DeepSeek / wisediag / OpenAI ...）
-  2. ollama : 本地离线大模型（Ollama，如 qwen2.5 / llama3 / glm4 ...）
+面向普通用户的版本：模型已写死为 DeepSeek 最新模型（deepseek-chat），
+用户只需粘贴一次 API Key 即可使用，无需任何模型知识。
+（开发者仍可通过 .env 覆盖为其它 OpenAI 兼容接口或 Ollama 离线模式。）
 """
 from pathlib import Path
 
@@ -14,26 +14,20 @@ BASE_DIR = Path(__file__).resolve().parent
 load_dotenv(BASE_DIR / ".env")
 
 # ------------------------------------------------------------------
-# 大模型提供商：online（在线 API） / ollama（离线本地模型）
+# 模型：DeepSeek（写死，deepseek-chat 始终指向 DeepSeek 最新 V3 系列）
+# 密钥由部署者在 .env 中预置，普通用户界面不出现任何模型/密钥概念。
 # ------------------------------------------------------------------
-LLM_PROVIDER = os.getenv("LLM_PROVIDER", "online").strip().lower()
+DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
+ONLINE_BASE_URL = os.getenv("ONLINE_BASE_URL", "https://api.deepseek.com/v1")
+ONLINE_MODEL = os.getenv("ONLINE_MODEL", "deepseek-chat")
 
-# ---- 在线：OpenAI 兼容接口（默认智谱 GLM，glm-4-flash 免费额度） ----
-ONLINE_BASE_URL = os.getenv("ONLINE_BASE_URL", "https://open.bigmodel.cn/api/paas/v4")
-ONLINE_API_KEY = os.getenv("ONLINE_API_KEY", "")
-ONLINE_MODEL = os.getenv("ONLINE_MODEL", "glm-4-flash")
+# 开发者模式：true 时导航出现「🛠 开发者选项」页（自定义模型/密钥/连通性测试）
+DEV_MODE = os.getenv("DEV_MODE", "").strip().lower() in ("1", "true", "yes", "on")
 
-# ---- 离线：Ollama 本地模型 ----
+# 开发者高级选项（默认关闭）：ollama = 离线本地模型
+LLM_PROVIDER = "ollama" if os.getenv("LLM_PROVIDER", "").strip().lower() == "ollama" else "online"
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:7b")
-
-# ------------------------------------------------------------------
-# 向量检索（RAG）配置：可选。
-# 留空时系统自动降级为 BM25 关键词检索，保证任何环境都能用 RAG。
-# ------------------------------------------------------------------
-EMBEDDING_BASE_URL = os.getenv("EMBEDDING_BASE_URL", "")
-EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "")
-EMBEDDING_API_KEY = os.getenv("EMBEDDING_API_KEY", "")
 
 # ------------------------------------------------------------------
 # 生成参数
@@ -46,7 +40,7 @@ REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "120"))
 RETRIEVER_TOP_K = int(os.getenv("RETRIEVER_TOP_K", "4"))
 
 # ------------------------------------------------------------------
-# 数据目录（数字孪生档案、指标、病历、报告、向量索引，全部保存在本地）
+# 数据目录（数字孪生档案、指标、病历、报告，全部保存在本地）
 # ------------------------------------------------------------------
 DATA_DIR = BASE_DIR / "data"
 PROFILE_PATH = DATA_DIR / "profile.json"
@@ -61,17 +55,9 @@ for _d in (DATA_DIR, RECORDS_DIR, REPORTS_DIR):
 
 
 def current_model_info() -> dict:
-    """返回当前生效的模型配置摘要（用于设置页展示）。"""
-    if LLM_PROVIDER == "ollama":
-        return {
-            "provider": "ollama（离线本地模型）",
-            "base_url": OLLAMA_BASE_URL,
-            "model": OLLAMA_MODEL,
-            "api_key": "（本地模型无需密钥）",
-        }
+    """返回当前模型状态摘要（用于侧边栏 / 开发者页展示）。"""
     return {
-        "provider": "online（在线 OpenAI 兼容模型）",
-        "base_url": ONLINE_BASE_URL,
-        "model": ONLINE_MODEL,
-        "api_key": (ONLINE_API_KEY[:6] + "..." + ONLINE_API_KEY[-4:]) if len(ONLINE_API_KEY) > 12 else ("已配置" if ONLINE_API_KEY else "未配置"),
+        "model": "DeepSeek（内置，无需配置）",
+        "key_ready": bool(DEEPSEEK_API_KEY) or LLM_PROVIDER == "ollama",
+        "dev_mode": DEV_MODE,
     }

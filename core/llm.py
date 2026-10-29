@@ -17,7 +17,7 @@ T = TypeVar("T", bound=object)
 
 
 def get_chat_model(temperature: Optional[float] = None, streaming: bool = True) -> BaseChatModel:
-    """根据 config.LLM_PROVIDER 创建聊天模型。"""
+    """创建 DeepSeek 聊天模型（写死，用户无需配置）。"""
     temperature = config.TEMPERATURE if temperature is None else temperature
 
     if config.LLM_PROVIDER == "ollama":
@@ -30,17 +30,19 @@ def get_chat_model(temperature: Optional[float] = None, streaming: bool = True) 
             num_predict=config.MAX_TOKENS,
         )
 
-    if not config.ONLINE_API_KEY:
-        raise ValueError(
-            "在线模式尚未配置 API Key：请到「模型设置」页填写，"
-            "或改用 Ollama 离线模式（LLM_PROVIDER=ollama）。"
-        )
+    if not config.DEEPSEEK_API_KEY:
+        if config.DEV_MODE:
+            raise ValueError(
+                "开发者模式：尚未配置 DEEPSEEK_API_KEY，"
+                "请在项目目录 .env 中填写，或在本页「🛠 开发者选项」中配置。"
+            )
+        raise ValueError("AI 服务暂未开通，请联系管理员开通后使用。")
 
     from langchain_openai import ChatOpenAI
 
     return ChatOpenAI(
         base_url=config.ONLINE_BASE_URL,
-        api_key=config.ONLINE_API_KEY,
+        api_key=config.DEEPSEEK_API_KEY,
         model=config.ONLINE_MODEL,
         temperature=temperature,
         max_tokens=config.MAX_TOKENS,

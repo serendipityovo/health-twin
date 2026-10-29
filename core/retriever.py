@@ -7,6 +7,7 @@ RAG 知识库：把用户的病历、报告、数字孪生档案构建为可检�
 """
 import hashlib
 import json
+import os
 from typing import List, Optional
 
 from langchain_core.documents import Document
@@ -24,23 +25,18 @@ def _tokenize_zh(text: str) -> List[str]:
 
 
 def _try_build_embeddings():
-    """尝试创建向量模型；不可用返回 None（自动降级 BM25）。"""
+    """尝试创建向量模型；不可用返回 None（自动降级 BM25）。
+
+    默认（DeepSeek 模式）使用 BM25 关键词检索，开箱即用、无需任何配置；
+    仅 Ollama 离线模式且已拉取向量模型时才启用 FAISS。
+    """
     try:
         if config.LLM_PROVIDER == "ollama":
             from langchain_ollama import OllamaEmbeddings
 
-            model = config.EMBEDDING_MODEL or "nomic-embed-text"
-            emb = OllamaEmbeddings(base_url=config.OLLAMA_BASE_URL, model=model)
-            emb.embed_query("连通性测试")
-            return emb
-        if config.EMBEDDING_BASE_URL and (config.EMBEDDING_API_KEY or config.ONLINE_API_KEY):
-            from langchain_openai import OpenAIEmbeddings
-
-            emb = OpenAIEmbeddings(
-                base_url=config.EMBEDDING_BASE_URL,
-                api_key=config.EMBEDDING_API_KEY or config.ONLINE_API_KEY,
-                model=config.EMBEDDING_MODEL or "embedding-2",
-                timeout=config.REQUEST_TIMEOUT,
+            emb = OllamaEmbeddings(
+                base_url=config.OLLAMA_BASE_URL,
+                model=os.getenv("EMBEDDING_MODEL", "nomic-embed-text"),
             )
             emb.embed_query("连通性测试")
             return emb

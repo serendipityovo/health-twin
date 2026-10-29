@@ -11,6 +11,7 @@ import streamlit as st
 import config
 from core.llm import get_chat_model
 from core.retriever import get_knowledge_base
+from ui.style import inject_custom_css, render_hero
 
 st.set_page_config(
     page_title="康孪生 HealthTwin",
@@ -18,6 +19,8 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
+inject_custom_css()
 
 
 # ---------------- 资源缓存（模型 / 知识库） ----------------
@@ -30,18 +33,19 @@ def _config_signature() -> tuple:
     """当前模型配置签名（配置变化时缓存自动失效）。"""
     if config.LLM_PROVIDER == "ollama":
         return ("ollama", config.OLLAMA_MODEL, config.OLLAMA_BASE_URL)
-    return ("online", config.ONLINE_MODEL, config.ONLINE_BASE_URL, config.ONLINE_API_KEY[-6:])
+    return ("online", config.ONLINE_MODEL, config.ONLINE_BASE_URL, config.DEEPSEEK_API_KEY[-6:])
 
 
 def get_llm(temperature: Optional[float] = None):
-    """按当前配置获取（缓存的）聊天模型；配置缺失时给出友好提示并停止本页渲染。"""
+    """按当前配置获取（缓存的）聊天模型；AI 未开通时给出友好提示并停止本页渲染。"""
     temp = config.TEMPERATURE if temperature is None else temperature
     provider, *rest = _config_signature()
     try:
         return _get_llm_cached(provider, "|".join(rest), temp)
     except ValueError as e:
-        st.error(f"⚠️ {e}")
-        st.info("请到左侧「⚙️ 模型设置」页配置模型后重试。")
+        st.warning(str(e))
+        if not config.current_model_info()["key_ready"]:
+            st.info("您仍然可以使用「🧬 数字孪生档案」记录血压、血糖等健康数据并查看趋势图。")
         st.stop()
 
 
@@ -60,32 +64,27 @@ def get_kb(force_new: bool = False):
 
 # ---------------- 主界面 ----------------
 def main():
-    st.title("🏥 康孪生 HealthTwin")
-    st.caption("基于数字孪生的健康管理系统 · LangChain 驱动 · 支持在线 / 离线大模型")
+    render_hero()
 
     with st.sidebar:
         st.markdown("### 🧭 功能导航")
-        page = st.radio(
-            "选择功能",
-            [
-                "💬 智能健康咨询",
-                "🧑‍⚕️ AI 智能问诊",
-                "📄 检查报告解读",
-                "🧬 数字孪生档案",
-                "🏥 智能就医匹配",
-                "⚙️ 模型设置",
-            ],
-            label_visibility="collapsed",
-        )
+        pages = [
+            "💬 智能健康咨询",
+            "🧑‍⚕️ AI 智能问诊",
+            "📄 检查报告解读",
+            "🧬 数字孪生档案",
+            "🏥 智能就医匹配",
+        ]
+        if config.DEV_MODE:
+            pages.append("🛠 开发者选项")
+        page = st.radio("选择功能", pages, label_visibility="collapsed")
         st.divider()
         info = config.current_model_info()
-        st.caption(
-            f"**模型**：{info['model']}\n\n"
-            f"**模式**：{info['provider']}\n\n"
-            f"**数据**：全部保存在本地 `data/` 目录"
-        )
-        if info["provider"].startswith("online") and not config.ONLINE_API_KEY:
-            st.warning("尚未配置 API Key，请先到「模型设置」页配置，或切换为 Ollama 离线模式。")
+        if info["key_ready"]:
+            st.success("AI 已就绪")
+        else:
+            st.warning("AI 服务暂未开通")
+        st.caption("🔒 你的健康数据只保存在本机")
 
     routes = {
         "💬 智能健康咨询": "ui.consultant_view",
@@ -93,7 +92,7 @@ def main():
         "📄 检查报告解读": "ui.report_view",
         "🧬 数字孪生档案": "ui.twin_view",
         "🏥 智能就医匹配": "ui.care_view",
-        "⚙️ 模型设置": "ui.settings_view",
+        "🛠 开发者选项": "ui.settings_view",
     }
     module = __import__(routes[page], fromlist=["render"])
     module.render(get_llm, get_kb)

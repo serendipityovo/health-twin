@@ -43,7 +43,7 @@ def render(get_llm, get_kb):
                     placeholder.markdown(full + "▌")
                 placeholder.markdown(full)
             except Exception as e:
-                full = f"抱歉，AI 服务调用失败：{e}\n\n请到「模型设置」页检查模型配置与连通性。"
+                full = f"抱歉，AI 服务调用失败：{e}\n\n如持续出现，请稍后再试或联系管理员。"
                 placeholder.markdown(full)
         st.session_state.consult_messages.append({"role": "assistant", "content": full})
 

@@ -1,95 +1,83 @@
 """
-视图：模型设置 —— 在线 / 离线模型切换、连通性测试、检索状态
-"""
-from pathlib import Path
+视图：🛠 开发者选项（仅 DEV_MODE=1 时出现在导航中）
 
+普通用户界面不出现任何模型 / 密钥 / 供应商概念；
+开发者可在此切换自定义模型（任意 OpenAI 兼容 API / Ollama）、
+配置密钥并测试连通性。配置写入 .env。
+"""
 import streamlit as st
 
 import config
 
 
-def _write_env(provider, base_url, model, api_key, emb_base, emb_model):
-    """把设置写回 .env（明文保存在本机，仅本地使用）。"""
-    lines = [
-        f"LLM_PROVIDER={provider}",
-        f"ONLINE_BASE_URL={base_url}",
-        f"ONLINE_MODEL={model}",
-        f"ONLINE_API_KEY={api_key}",
-        "OLLAMA_BASE_URL=" + (st.session_state.get("ollama_url", "") or "http://localhost:11434"),
-        "OLLAMA_MODEL=" + (st.session_state.get("ollama_model", "") or "qwen2.5:7b"),
-        f"EMBEDDING_BASE_URL={emb_base}",
-        f"EMBEDDING_MODEL={emb_model}",
-    ]
+def _write_env(fields: dict):
+    """合并写入 .env（保留未涉及的键）。"""
     env_path = config.BASE_DIR / ".env"
-    env_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    existing = {}
+    if env_path.exists():
+        for line in env_path.read_text(encoding="utf-8").splitlines():
+            if "=" in line and not line.strip().startswith("#"):
+                k, v = line.split("=", 1)
+                existing[k.strip()] = v.strip()
+    existing.update({k: v for k, v in fields.items() if v is not None})
+    env_path.write_text(
+        "\n".join(f"{k}={v}" for k, v in existing.items()) + "\n", encoding="utf-8"
+    )
 
 
 def render(get_llm, get_kb):
-    st.subheader("⚙️ 模型设置")
-    st.caption("支持在线大模型（任意 OpenAI 兼容接口）与离线大模型（Ollama），修改后自动写入 .env 并生效")
+    st.subheader("🛠 开发者选项")
+    st.caption("本页仅在 DEV_MODE=1 时可见；普通用户界面不含任何模型配置")
 
     info = config.current_model_info()
-    c1, c2 = st.columns(2)
-    c1.metric("当前模式", info["provider"])
-    c2.metric("当前模型", info["model"])
+    c1, c2, c3 = st.columns(3)
+    c1.metric("当前模型", config.ONLINE_MODEL if config.LLM_PROVIDER == "online" else config.OLLAMA_MODEL)
+    c2.metric("接入方式", "在线 API" if config.LLM_PROVIDER == "online" else "Ollama 离线")
+    c3.metric("密钥状态", "已配置" if info["key_ready"] else "未配置")
 
     st.divider()
     provider = st.radio(
-        "切换模型接入方式",
-        ["online（在线 API）", "ollama（离线本地）"],
-        index=0 if config.LLM_PROVIDER == "online" else 1,
+        "接入方式",
+        ["DeepSeek（默认，写死最新模型）", "自定义 OpenAI 兼容 API", "Ollama 离线模型"],
         horizontal=True,
     )
 
-    if provider.startswith("online"):
-        st.markdown("##### 在线模型（OpenAI 兼容接口）")
-        presets = {
-            "智谱 GLM（glm-4-flash 免费额度）": ("https://open.bigmodel.cn/api/paas/v4", "glm-4-flash"),
-            "DeepSeek": ("https://api.deepseek.com/v1", "deepseek-chat"),
-            "OpenAI": ("https://api.openai.com/v1", "gpt-4o-mini"),
-            "原课设 wisediag": ("https://openapi.wisediag.com/v1", "wisediag-large-latest"),
-            "自定义": ("", ""),
-        }
-        preset = st.selectbox("快速预设", list(presets.keys()))
-        default_url, default_model = presets[preset]
-        base_url = st.text_input("Base URL", value=default_url or config.ONLINE_BASE_URL)
-        model = st.text_input("模型名称", value=default_model or config.ONLINE_MODEL)
-        api_key = st.text_input("API Key", value=config.ONLINE_API_KEY, type="password")
+    fields = {"DEV_MODE": "1"}
+    if provider.startswith("DeepSeek"):
+        key = st.text_input("DeepSeek API Key（platform.deepseek.com 创建）",
+                            value=config.DEEPSEEK_API_KEY, type="password")
+        fields.update({"DEEPSEEK_API_KEY": key, "LLM_PROVIDER": "online",
+                       "ONLINE_BASE_URL": "https://api.deepseek.com/v1", "ONLINE_MODEL": "deepseek-chat"})
+    elif provider.startswith("自定义"):
+        base_url = st.text_input("Base URL", value=config.ONLINE_BASE_URL)
+        model = st.text_input("模型名称", value=config.ONLINE_MODEL)
+        key = st.text_input("API Key", value=config.DEEPSEEK_API_KEY, type="password")
+        fields.update({"LLM_PROVIDER": "online", "ONLINE_BASE_URL": base_url,
+                       "ONLINE_MODEL": model, "DEEPSEEK_API_KEY": key})
     else:
-        st.markdown("##### 离线模型（Ollama）")
-        st.info("先安装 [Ollama](https://ollama.com)，然后执行：`ollama pull qwen2.5:7b`（首次约 4.7GB）")
-        st.text_input("Ollama 地址", value=config.OLLAMA_BASE_URL, key="ollama_url")
-        st.text_input("模型名称", value=config.OLLAMA_MODEL, key="ollama_model",
-                      help="如 qwen2.5:7b / llama3.1:8b / glm4:9b")
-        base_url, model, api_key = "", "", ""
+        st.info("先安装 Ollama 并拉取模型：ollama pull qwen2.5:7b")
+        url = st.text_input("Ollama 地址", value=config.OLLAMA_BASE_URL)
+        model = st.text_input("模型名称", value=config.OLLAMA_MODEL)
+        fields.update({"LLM_PROVIDER": "ollama", "OLLAMA_BASE_URL": url, "OLLAMA_MODEL": model})
 
-    st.markdown("##### 向量检索（可选，留空自动用 BM25 关键词检索）")
-    emb_col1, emb_col2 = st.columns(2)
-    emb_base = emb_col1.text_input("Embedding Base URL", value=config.EMBEDDING_BASE_URL,
-                                   placeholder="如 https://open.bigmodel.cn/api/paas/v4")
-    emb_model = emb_col2.text_input("Embedding 模型", value=config.EMBEDDING_MODEL,
-                                    placeholder="如 embedding-2")
-
-    if st.button("💾 保存并生效", type="primary", use_container_width=True):
-        prov = "ollama" if provider.startswith("ollama") else "online"
-        _write_env(prov, base_url, model, api_key, emb_base, emb_model)
-        st.cache_resource.clear()
-        st.toast("设置已保存 ✅")
-        st.rerun()
-
-    st.divider()
-    st.markdown("##### 🔌 连通性测试")
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("测试大模型", use_container_width=True):
+        if st.button("💾 保存并生效", type="primary", use_container_width=True):
+            _write_env(fields)
+            st.cache_resource.clear()
+            st.toast("已保存 ✅")
+            st.rerun()
+    with col2:
+        if st.button("🔌 测试连通性", use_container_width=True):
             with st.spinner("调用中..."):
                 try:
                     from core.llm import get_chat_model
                     resp = get_chat_model(temperature=0.1).invoke("请只回复两个字：正常")
-                    st.success(f"✅ 连通正常，模型回复：{resp.content[:50]}")
+                    st.success(f"✅ 连通正常，回复：{resp.content[:50]}")
                 except Exception as e:
                     st.error(f"❌ 调用失败：{e}")
-    with col2:
-        if st.button("查看 RAG 知识库状态", use_container_width=True):
+
+    with st.expander("🔎 RAG 知识库状态"):
+        if st.button("查看 / 重建"):
             kb = get_kb(force_new=True)
             st.info(kb.status())
