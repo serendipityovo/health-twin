@@ -47,6 +47,24 @@ DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "").strip() or _embedded_key()
 ONLINE_BASE_URL = os.getenv("ONLINE_BASE_URL", "https://api.deepseek.com/v1")
 ONLINE_MODEL = os.getenv("ONLINE_MODEL", "deepseek-chat")
 
+# DeepSeek 为国内直连服务：显式加入 NO_PROXY，避免 Clash 等系统代理在
+# 转发时被 TLS 重置导致打包版 "Connection error"（尊重用户已有 NO_PROXY）
+def _bypass_proxy_for_deepseek() -> None:
+    if "deepseek" not in ONLINE_BASE_URL:
+        return
+    from urllib.parse import urlparse
+
+    host = urlparse(ONLINE_BASE_URL).hostname or "api.deepseek.com"
+    existing = os.environ.get("NO_PROXY", os.environ.get("no_proxy", ""))
+    entries = [e.strip() for e in existing.split(",") if e.strip()]
+    if host not in entries:
+        entries.append(host)
+    os.environ["NO_PROXY"] = ",".join(entries)
+    os.environ["no_proxy"] = os.environ["NO_PROXY"]
+
+
+_bypass_proxy_for_deepseek()
+
 # 开发者模式：true 时导航出现「🛠 开发者选项」页（自定义模型/密钥/连通性测试）
 DEV_MODE = os.getenv("DEV_MODE", "").strip().lower() in ("1", "true", "yes", "on")
 
