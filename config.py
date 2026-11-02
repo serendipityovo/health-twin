@@ -2,22 +2,48 @@
 康孪生 HealthTwin 全局配置
 
 面向普通用户的版本：模型已写死为 DeepSeek 最新模型（deepseek-chat），
-用户只需粘贴一次 API Key 即可使用，无需任何模型知识。
+密钥由部署者在 .env / 环境变量 / 打包时内置提供，用户零配置。
 （开发者仍可通过 .env 覆盖为其它 OpenAI 兼容接口或 Ollama 离线模式。）
 """
+import sys
 from pathlib import Path
 
 import os
 from dotenv import load_dotenv
 
-BASE_DIR = Path(__file__).resolve().parent
+# ------------------------------------------------------------------
+# 运行形态：源码运行 vs PyInstaller 打包（exe）运行
+#   打包后：资源（代码/知识库）在 exe 的 _internal 目录，用户数据在 exe 旁边
+# ------------------------------------------------------------------
+IS_FROZEN = bool(getattr(sys, "frozen", False))
+if IS_FROZEN:
+    BASE_DIR = Path(sys.executable).resolve().parent       # exe 旁：data/、.env
+    RESOURCE_DIR = Path(getattr(sys, "_MEIPASS", BASE_DIR))  # 打包资源：knowledge 等
+else:
+    BASE_DIR = Path(__file__).resolve().parent
+    RESOURCE_DIR = BASE_DIR
+
 load_dotenv(BASE_DIR / ".env")
+
+
+def _embedded_key() -> str:
+    """构建时烧录进发行版的密钥（packaging/_embedded_key.py），最后才回退到它。"""
+    try:
+        from importlib import util
+        spec = util.find_spec("_embedded_key")
+        if spec and spec.loader:
+            module = util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            return str(getattr(module, "DEEPSEEK_API_KEY", "") or "")
+    except Exception:
+        pass
+    return ""
 
 # ------------------------------------------------------------------
 # 模型：DeepSeek（写死，deepseek-chat 始终指向 DeepSeek 最新 V3 系列）
-# 密钥由部署者在 .env 中预置，普通用户界面不出现任何模型/密钥概念。
+# 密钥优先级：系统环境变量 > .env > 打包时内置
 # ------------------------------------------------------------------
-DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
+DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "").strip() or _embedded_key()
 ONLINE_BASE_URL = os.getenv("ONLINE_BASE_URL", "https://api.deepseek.com/v1")
 ONLINE_MODEL = os.getenv("ONLINE_MODEL", "deepseek-chat")
 
@@ -48,7 +74,7 @@ METRICS_PATH = DATA_DIR / "metrics.json"
 RECORDS_DIR = DATA_DIR / "records"
 REPORTS_DIR = DATA_DIR / "reports"
 INDEX_DIR = DATA_DIR / "faiss_index"
-KNOWLEDGE_DIR = BASE_DIR / "knowledge"
+KNOWLEDGE_DIR = RESOURCE_DIR / "knowledge"
 
 for _d in (DATA_DIR, RECORDS_DIR, REPORTS_DIR):
     _d.mkdir(parents=True, exist_ok=True)

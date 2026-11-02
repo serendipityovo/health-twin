@@ -182,6 +182,20 @@ streamlit run app.py
 - **任意 OpenAI 兼容 API**（智谱 GLM / OpenAI / 本地 vLLM 等）：改 `ONLINE_BASE_URL` + `ONLINE_MODEL`
 - **Ollama 完全离线**：`LLM_PROVIDER=ollama`（先 `ollama pull qwen2.5:7b`，数据不出本机）
 
+### 桌面版 exe（真正开箱即用）
+
+把整个系统打包成**双击即用的桌面应用**（无需 Python、无需命令行、密钥已内置）：
+
+```bash
+python packaging/build.py
+```
+
+构建脚本自动完成：读取 `DEEPSEEK_API_KEY`（环境变量或 .env）**烧录进 exe 内部** → 生成图标 → PyInstaller 打包（onedir）→ 写入《使用说明.txt》→ 输出 `dist/HealthTwin-win64.zip`。
+
+把这个 zip 发给任何人：解压 → 双击 `HealthTwin.exe` → 几秒后弹出原生应用窗口（pywebview + WebView2），AI 已开通、全程零配置；用户数据保存在文件夹内的 `data/`，换电脑整包拷走即可。
+
+技术架构：双进程——主进程负责 pywebview 窗口，`--worker` 子进程内运行 Streamlit CLI（本机随机端口，健康检查就绪后开窗）；密钥优先级为 环境变量 > `.env` > 打包内置，普通用户界面始终无任何配置项。
+
 ## 配置说明
 
 普通部署只需关心前两项，其余为开发者高级选项：

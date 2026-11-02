@@ -5,6 +5,14 @@ data/
 # 密钥与环境
 .env
 *.key
+# 构建时烧录的内置密钥（含真实 Key，绝不入库）
+_embedded_key.py
+
+# 桌面版打包产物
+build/
+dist/
+packaging/app_icon.ico
+*.zip
 
 # Python
 __pycache__/
@@ -23,3 +31,4 @@ dist/
 # 系统文件
 .DS_Store
 Thumbs.db
+packaging/_wheels/
