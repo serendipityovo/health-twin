@@ -4,14 +4,15 @@
 import json
 import uuid
 from datetime import datetime
-from typing import List, Optional
+from typing import List
 
 import config
+from twin.atomic import atomic_write
 
 
 def _save_item(directory, item: dict) -> None:
     path = directory / f"{item['id']}.json"
-    path.write_text(json.dumps(item, ensure_ascii=False, indent=2), encoding="utf-8")
+    atomic_write(path, json.dumps(item, ensure_ascii=False, indent=2))
 
 
 def _list_items(directory) -> List[dict]:
@@ -20,9 +21,13 @@ def _list_items(directory) -> List[dict]:
         return items
     for f in sorted(directory.glob("*.json")):
         try:
-            items.append(json.loads(f.read_text(encoding="utf-8")))
+            item = json.loads(f.read_text(encoding="utf-8"))
         except Exception:
             continue
+        # 缺少必要字段的手工编辑/异常写入文件直接跳过，不让页面崩溃
+        if not isinstance(item, dict) or not all(item.get(k) for k in ("id", "content", "time")):
+            continue
+        items.append(item)
     items.sort(key=lambda x: x.get("time", ""), reverse=True)
     return items
 

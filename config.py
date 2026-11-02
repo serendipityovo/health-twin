@@ -4,12 +4,14 @@
 面向普通用户的版本：模型已写死为 DeepSeek 最新模型（deepseek-chat），
 密钥由部署者在 .env / 环境变量 / 打包时内置提供，用户零配置。
 （开发者仍可通过 .env 覆盖为其它 OpenAI 兼容接口或 Ollama 离线模式。）
+
+支持 reload() 热更新：设置页保存 .env 后无需重启进程。
 """
 import sys
 from pathlib import Path
 
 import os
-from dotenv import load_dotenv
+from dotenv import dotenv_values
 
 # ------------------------------------------------------------------
 # 运行形态：源码运行 vs PyInstaller 打包（exe）运行
@@ -23,7 +25,7 @@ else:
     BASE_DIR = Path(__file__).resolve().parent
     RESOURCE_DIR = BASE_DIR
 
-load_dotenv(BASE_DIR / ".env")
+ENV_PATH = BASE_DIR / ".env"
 
 
 def _embedded_key() -> str:
@@ -39,17 +41,10 @@ def _embedded_key() -> str:
         pass
     return ""
 
-# ------------------------------------------------------------------
-# 模型：DeepSeek（写死，deepseek-chat 始终指向 DeepSeek 最新 V3 系列）
-# 密钥优先级：系统环境变量 > .env > 打包时内置
-# ------------------------------------------------------------------
-DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "").strip() or _embedded_key()
-ONLINE_BASE_URL = os.getenv("ONLINE_BASE_URL", "https://api.deepseek.com/v1")
-ONLINE_MODEL = os.getenv("ONLINE_MODEL", "deepseek-chat")
 
-# DeepSeek 为国内直连服务：显式加入 NO_PROXY，避免 Clash 等系统代理在
-# 转发时被 TLS 重置导致打包版 "Connection error"（尊重用户已有 NO_PROXY）
 def _bypass_proxy_for_deepseek() -> None:
+    """DeepSeek 为国内直连服务：显式加入 NO_PROXY，避免系统代理（Clash 等）
+    转发时被 TLS 重置导致 "Connection error"（尊重用户已有 NO_PROXY）。"""
     if "deepseek" not in ONLINE_BASE_URL:
         return
     from urllib.parse import urlparse
@@ -63,25 +58,43 @@ def _bypass_proxy_for_deepseek() -> None:
     os.environ["no_proxy"] = os.environ["NO_PROXY"]
 
 
-_bypass_proxy_for_deepseek()
+def _apply_env() -> None:
+    """（重新）加载全部配置项。优先级：系统环境变量 > .env > 内置密钥。"""
+    global LLM_PROVIDER, DEEPSEEK_API_KEY, ONLINE_BASE_URL, ONLINE_MODEL
+    global OLLAMA_BASE_URL, OLLAMA_MODEL, DEV_MODE
+    global TEMPERATURE, MAX_TOKENS, REQUEST_TIMEOUT, RETRIEVER_TOP_K
 
-# 开发者模式：true 时导航出现「🛠 开发者选项」页（自定义模型/密钥/连通性测试）
-DEV_MODE = os.getenv("DEV_MODE", "").strip().lower() in ("1", "true", "yes", "on")
+    file_env: dict = {}
+    if ENV_PATH.exists():
+        try:
+            file_env = {k: v for k, v in (dotenv_values(ENV_PATH) or {}).items() if v is not None}
+        except Exception:
+            file_env = {}
 
-# 开发者高级选项（默认关闭）：ollama = 离线本地模型
-LLM_PROVIDER = "ollama" if os.getenv("LLM_PROVIDER", "").strip().lower() == "ollama" else "online"
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:7b")
+    def val(key: str, default: str = "") -> str:
+        v = os.environ.get(key) or file_env.get(key) or default
+        return v.strip() if isinstance(v, str) else str(v).strip()
 
-# ------------------------------------------------------------------
-# 生成参数
-# ------------------------------------------------------------------
-TEMPERATURE = float(os.getenv("TEMPERATURE", "0.7"))
-MAX_TOKENS = int(os.getenv("MAX_TOKENS", "2048"))
-REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "120"))
+    DEEPSEEK_API_KEY = val("DEEPSEEK_API_KEY") or _embedded_key()
+    ONLINE_BASE_URL = val("ONLINE_BASE_URL", "https://api.deepseek.com/v1")
+    ONLINE_MODEL = val("ONLINE_MODEL", "deepseek-chat")
+    LLM_PROVIDER = "ollama" if val("LLM_PROVIDER").lower() == "ollama" else "online"
+    OLLAMA_BASE_URL = val("OLLAMA_BASE_URL", "http://localhost:11434")
+    OLLAMA_MODEL = val("OLLAMA_MODEL", "qwen2.5:7b")
+    DEV_MODE = val("DEV_MODE").lower() in ("1", "true", "yes", "on")
+    TEMPERATURE = float(val("TEMPERATURE", "0.7") or 0.7)
+    MAX_TOKENS = int(val("MAX_TOKENS", "2048") or 2048)
+    REQUEST_TIMEOUT = int(val("REQUEST_TIMEOUT", "120") or 120)
+    RETRIEVER_TOP_K = int(val("RETRIEVER_TOP_K", "4") or 4)
+    _bypass_proxy_for_deepseek()
 
-# RAG 检索条数
-RETRIEVER_TOP_K = int(os.getenv("RETRIEVER_TOP_K", "4"))
+
+def reload() -> None:
+    """设置页保存 .env 后调用：热更新配置，无需重启进程。"""
+    _apply_env()
+
+
+_apply_env()
 
 # ------------------------------------------------------------------
 # 数据目录（数字孪生档案、指标、病历、报告，全部保存在本地）

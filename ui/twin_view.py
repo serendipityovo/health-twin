@@ -42,9 +42,10 @@ def _render_profile_form(store: ProfileStore):
         sleep = c15.text_input("睡眠", value=p.lifestyle.sleep)
         diet = c16.text_input("饮食", value=p.lifestyle.diet)
 
-        if st.form_submit_button("💾 保存档案", type="primary", use_container_width=True):
+        if st.form_submit_button("💾 保存档案", type="primary", width="stretch"):
             def split_list(s):
-                return [x.strip() for x in s.replace("，", ",").split(",") if x.strip()]
+                # 兼容中文逗号、顿号、英文逗号分隔，避免保存时把整串并成一项
+                return [x.strip() for x in s.replace("，", ",").replace("、", ",").split(",") if x.strip()]
             store.save(type(p)(
                 name=name, sex=sex, age=int(age) or None,
                 height_cm=height or None, weight_kg=weight or None,
@@ -72,11 +73,13 @@ def _render_metrics(get_llm):
         value = c2.number_input("数值", step=0.1)
         d = c3.date_input("日期", value=date.today())
         note = c4.text_input("备注（可选）", placeholder="如：晨起测量")
-        if st.form_submit_button("➕ 添加记录", use_container_width=True):
+        if st.form_submit_button("➕ 添加记录", width="stretch"):
             if value > 0:
                 store.add(metric, value, d.isoformat(), note)
                 st.toast("指标已记录 ✅")
                 st.rerun()
+            else:
+                st.warning("数值需要大于 0，本次未保存（请检查是否漏填了测量值）")
 
     df = store.dataframe()
     if df.empty:
@@ -93,8 +96,27 @@ def _render_metrics(get_llm):
     st.line_chart(sub, height=260)
     st.dataframe(
         df[df["metric"] == chart_metric].sort_values("date", ascending=False).assign(date=lambda x: x["date"].dt.strftime("%Y-%m-%d")),
-        use_container_width=True, hide_index=True,
+        width="stretch", hide_index=True,
     )
+
+    # 删除单条记录（录错可删，最新 15 条）
+    with st.expander("🗑️ 删除该指标的记录（录错了点这里）"):
+        rows = store._load_raw()
+        idxs = [i for i, r in enumerate(rows) if r["metric"] == chart_metric]
+        shown = 0
+        for gi in reversed(idxs):
+            if shown >= 15:
+                break
+            r = rows[gi]
+            shown += 1
+            col1, col2 = st.columns([5, 1])
+            col1.caption(f"{r['date']}　{r['value']}　{r.get('note', '') or '—'}")
+            if col2.button("🗑️", key=f"delmetric_{chart_metric}_{gi}", help="删除这条记录"):
+                store.delete(gi)
+                st.toast("已删除")
+                st.rerun()
+        if shown == 0:
+            st.caption("（暂无记录）")
 
 
 def _render_records():
@@ -132,8 +154,8 @@ def render(get_llm, get_kb):
         _render_records()
 
     with tab4:
-        st.caption("基于全部孪生数据（档案 + 指标 + 病历）由 AI 生成综合健康评估：画像、风险分层、干预建议、监测计划")
-        if st.button("🤖 生成《数字孪生体健康评估报告》", type="primary", use_container_width=True):
+        st.caption("基于档案 + 近 90 天指标趋势 + 最近 12 份病历摘要，由 AI 生成综合健康评估：画像、风险分层、干预建议、监测计划")
+        if st.button("🤖 生成《数字孪生体健康评估报告》", type="primary", width="stretch"):
             from agents.twin_analyst import TwinAnalystChain
             with st.spinner("AI 正在分析你的数字孪生体..."):
                 try:

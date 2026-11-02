@@ -8,6 +8,7 @@ from typing import List, Optional
 from pydantic import BaseModel, Field
 
 import config
+from twin.atomic import atomic_write
 
 
 class Lifestyle(BaseModel):
@@ -48,7 +49,8 @@ class HealthProfile(BaseModel):
             self.occupation, self.blood_type,
             self.chronic_conditions, self.allergies, self.medications,
             self.family_history,
-            self.lifestyle.smoking, self.lifestyle.exercise, self.lifestyle.sleep,
+            self.lifestyle.smoking, self.lifestyle.drinking,
+            self.lifestyle.exercise, self.lifestyle.sleep, self.lifestyle.diet,
         ]
         filled = sum(1 for f in fields if f not in ("", None, [],))
         return filled / len(fields)
@@ -71,9 +73,7 @@ class ProfileStore:
 
     def save(self, profile: HealthProfile) -> None:
         profile.updated_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        self.path.write_text(
-            profile.model_dump_json(indent=2), encoding="utf-8"
-        )
+        atomic_write(self.path, profile.model_dump_json(indent=2))
 
     def update_fields(self, **kwargs) -> HealthProfile:
         """增量更新档案字段（数字孪生自动同步入口）。"""

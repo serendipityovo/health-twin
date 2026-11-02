@@ -2,6 +2,11 @@
 import os
 import sys
 
+try:  # CP936 控制台下避免非 GBK 字符（如勾号）导致 UnicodeEncodeError
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.chdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -176,11 +181,78 @@ def _():
     assert res["result"] is not None and res["result"].urgency == "soon"
     assert res["result"].recommended_departments[0].department == "心血管内科"
 
+    # 推荐科室硬性截断到 3 个
+    four = '{"urgency": "routine", "recommended_departments": [' + ",".join(
+        f'{{"department": "科室{i}", "reason": "r{i}"}}' for i in range(4)
+    ) + '], "red_flags": [], "preparation_checklist": [], "questions_to_ask": [], "general_advice": ""}'
+    res4 = CareMatcherChain(FakeListChatModel(responses=[four])).match("乏力")
+    assert len(res4["result"].recommended_departments) == 3, "应截断到 3 个科室"
+
+    # 结构化调用彻底失败时应抛 RuntimeError（携带原因）而不是静默 None
+    from core.llm import call_structured
+    boom = FakeListChatModel(responses=["完全不是JSON的东西"])
+    try:
+        call_structured(boom, CareRecommendation, [("human", "测试")])
+        raise AssertionError("应抛 RuntimeError")
+    except RuntimeError:
+        pass
+
+
+@check("口语症状命中（同义词扩展）")
+def _():
+    from agents.care_matcher import keyword_match, _expand_colloquial
+    cases = {
+        "发烧": "急诊科", "拉肚子": "消化内科", "胸口疼": "心血管内科",
+        "血压150/95": "心血管内科", "牙疼": "口腔科",
+    }
+    for symptom, expect in cases.items():
+        hits = [h["department"] for h in keyword_match(_expand_colloquial(symptom))]
+        assert expect in hits, f"'{symptom}' 未命中 {expect}: {hits}"
+
+
+@check("病历抽取过滤「未提及/未查」")
+def _():
+    from agents.record_writer import _clean_list, _clean_str
+    assert _clean_list(["高血压", "未提及", "", "高血脂"]) == ["高血压", "高血脂"]
+    assert _clean_list(["未查"]) is None
+    assert _clean_str("未提及") is None
+    assert _clean_str("每天一包") == "每天一包"
+
+
+@check("坏 JSON 病历不崩溃（缺字段跳过）")
+def _():
+    import config
+    from twin.records import list_records
+    bad = config.RECORDS_DIR / "zz_bad_test.json"
+    bad.write_text('{"id": "bad", "title": "坏数据"}', encoding="utf-8")  # 缺 content/time
+    try:
+        ids = [r["id"] for r in list_records()]
+        assert "bad" not in ids
+    finally:
+        bad.unlink()
+
+
+@check("config.reload() 热更新")
+def _():
+    import config
+    old = config.ENV_PATH.read_text(encoding="utf-8") if config.ENV_PATH.exists() else ""
+    try:
+        # 用不受系统环境变量干扰的变量测试（测试机可能设置了真实的 DEEPSEEK_API_KEY 环境变量）
+        config.ENV_PATH.write_text("ONLINE_MODEL=reload-test-model\n", encoding="utf-8")
+        config.reload()
+        assert config.ONLINE_MODEL == "reload-test-model", config.ONLINE_MODEL
+        config.ENV_PATH.write_text("ONLINE_MODEL=deepseek-chat\n", encoding="utf-8")
+        config.reload()
+        assert config.ONLINE_MODEL == "deepseek-chat"
+    finally:
+        config.ENV_PATH.write_text(old, encoding="utf-8")
+        config.reload()
+
 
 print("\n" + "=" * 50)
 if FAILED:
-    print(f"✗ {len(FAILED)} 项失败：")
+    print(f"[X] {len(FAILED)} 项失败：")
     for name, err in FAILED:
         print(f"  - {name}: {err}")
     sys.exit(1)
-print("✓ 全部冒烟测试通过")
+print("[ALL PASS] 全部冒烟测试通过")

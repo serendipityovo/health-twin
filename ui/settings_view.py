@@ -62,13 +62,14 @@ def render(get_llm, get_kb):
 
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("💾 保存并生效", type="primary", use_container_width=True):
+        if st.button("💾 保存并生效", type="primary", width="stretch"):
             _write_env(fields)
+            config.reload()  # 热更新配置：无需重启进程
             st.cache_resource.clear()
-            st.toast("已保存 ✅")
+            st.toast("已保存并生效 ✅")
             st.rerun()
     with col2:
-        if st.button("🔌 测试连通性", use_container_width=True):
+        if st.button("🔌 测试连通性", width="stretch"):
             with st.spinner("调用中..."):
                 try:
                     from core.llm import get_chat_model

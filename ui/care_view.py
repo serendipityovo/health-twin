@@ -55,15 +55,20 @@ def render(get_llm, get_kb):
         placeholder="例如：最近一周头晕、心悸，测量血压 150/95，有高血压家族史，应该挂什么科？",
     )
 
-    if st.button("🔍 开始匹配", type="primary", use_container_width=True) and symptom.strip():
-        matcher = CareMatcherChain(get_llm(temperature=0.3))
-        with st.spinner("知识库检索 + AI 分析中..."):
-            try:
-                result = matcher.match(symptom.strip())
-            except Exception as e:
-                st.error(f"匹配失败：{e}\n\n如持续出现，请稍后再试或联系管理员。")
-                st.stop()
-        st.session_state.care_result = result
+    if st.button("🔍 开始匹配", type="primary", width="stretch"):
+        if not symptom.strip():
+            st.warning("请先输入症状描述，再点击「开始匹配」")
+        else:
+            matcher = CareMatcherChain(get_llm(temperature=0.3))
+            with st.spinner("知识库检索 + AI 分析中..."):
+                try:
+                    result = matcher.match(symptom.strip())
+                except Exception as e:
+                    # 异常信息携带真实原因（网络 / 密钥 / 服务端错误），方便排错
+                    st.error(f"匹配失败：{e}")
+                    st.info("请检查网络后重试；若提示密钥/鉴权问题，请联系管理员。")
+                    st.stop()
+            st.session_state.care_result = result
 
     result = st.session_state.get("care_result")
     if result:
@@ -76,7 +81,7 @@ def render(get_llm, get_kb):
         if result["result"] is not None:
             _render_result(result)
         else:
-            st.warning("结构化解析失败，可能是模型能力不足，请换用更强的模型后重试。")
+            st.warning("本次未能生成结构化推荐，请稍后重试。")
 
     st.divider()
     st.caption("⚠️ 免责声明：科室推荐仅作导诊参考，不构成医疗诊断；急症请直接拨打 120 或前往急诊。")

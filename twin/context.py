@@ -7,8 +7,8 @@ from typing import Optional
 from twin.profile import ProfileStore
 
 
-def build_twin_context(include_records: bool = True, max_records: int = 5,
-                       max_record_chars: int = 300) -> str:
+def build_twin_context(include_records: bool = True, max_records: int = 12,
+                       max_record_chars: int = 600) -> str:
     """生成注入 LLM 提示词的孪生体上下文。"""
     from twin.metrics import MetricStore
     from twin.records import list_records

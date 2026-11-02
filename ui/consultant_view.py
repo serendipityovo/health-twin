@@ -48,6 +48,6 @@ def render(get_llm, get_kb):
         st.session_state.consult_messages.append({"role": "assistant", "content": full})
 
     with st.sidebar:
-        if st.button("🗑️ 清空当前对话", use_container_width=True):
+        if st.button("🗑️ 清空当前对话", width="stretch"):
             st.session_state.consult_messages = []
             st.rerun()

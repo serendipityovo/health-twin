@@ -81,7 +81,9 @@ def main():
         st.divider()
         info = config.current_model_info()
         if info["key_ready"]:
-            st.success("AI 已就绪")
+            st.success("AI 已配置")
+            if config.DEV_MODE:
+                st.caption("连通性可在「🛠 开发者选项」测试")
         else:
             st.warning("AI 服务暂未开通")
         st.caption("🔒 你的健康数据只保存在本机")

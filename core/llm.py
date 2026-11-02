@@ -92,14 +92,17 @@ def call_structured(
     结构化输出统一入口：
       1. 优先使用 LangChain 的 with_structured_output（工具调用 / JSON 模式）；
       2. 供应商不支持时自动降级为「提示词要求 JSON + 宽松解析」。
+    两条路径都失败时抛 RuntimeError（携带原始异常，如网络/密钥/400），
+    由调用方决定是当作硬错误（就医匹配）还是静默降级（档案抽取）。
     """
+    first_err: Optional[Exception] = None
     try:
         chain = llm.with_structured_output(schema)
         result = chain.invoke(messages)
         if result is not None:
             return result
-    except Exception:
-        pass
+    except Exception as e:  # 网络不通 / 密钥错误 / 服务端 4xx 等
+        first_err = e
 
     # ---- 降级路径：直接让模型输出 JSON ----
     from langchain_core.output_parsers import StrOutputParser
@@ -110,11 +113,13 @@ def call_structured(
         "不要输出任何 JSON 之外的文字：\n" + schema_json
     )
     flat = [_messages_to_text(messages) + instruction]
+    fallback_err: Optional[Exception] = None
     try:
         text = (llm | StrOutputParser()).invoke(flat)
         data = extract_json(text)
         if data:
             return schema.model_validate(data)  # type: ignore[attr-defined]
-    except Exception:
-        return None
-    return None
+    except Exception as e:
+        fallback_err = e
+
+    raise RuntimeError(f"结构化输出调用失败：{first_err or fallback_err}")

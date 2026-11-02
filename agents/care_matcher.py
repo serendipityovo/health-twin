@@ -37,6 +37,20 @@ class CareRecommendation(BaseModel):
 
 URGENCY_LABEL = {"routine": "常规就诊", "soon": "尽快就诊", "urgent": "⚠️ 紧急就医"}
 
+# 常见口语症状 -> 知识库标准词（命中前置换，让"发烧/拉肚子"这类口语也能命中科室）
+SYNONYMS = {
+    "发烧": "发热", "拉肚子": "腹泻", "肚子疼": "腹痛", "肚子痛": "腹痛", "腹泄": "腹泻",
+    "胸口疼": "胸痛", "胸口痛": "胸痛", "心口疼": "胸痛", "心口痛": "胸痛",
+    "牙疼": "牙痛", "血压高": "高血压", "血糖高": "血糖", "心慌": "心悸",
+    "喘不上气": "呼吸困难", "浑身没劲": "乏力", "起夜多": "尿频",
+    "睡不着": "失眠", "掉头发": "脱发", "起疹子": "皮疹", "恶心想吐": "恶心呕吐",
+}
+
+
+def _expand_colloquial(symptom: str) -> str:
+    extras = [std for slang, std in SYNONYMS.items() if slang in symptom]
+    return symptom + (" " + " ".join(extras) if extras else "")
+
 
 def load_departments() -> dict:
     path = config.KNOWLEDGE_DIR / "departments.json"
@@ -78,8 +92,9 @@ class CareMatcherChain:
         self.llm = llm
 
     def match(self, symptom: str) -> dict:
-        """返回 {"kb_hits": [...], "result": CareRecommendation|None, "raw": str|None}"""
-        hits = keyword_match(symptom)
+        """返回 {"kb_hits": [...], "result": CareRecommendation}
+        结构化调用失败时直接抛 RuntimeError（携带真实原因，如网络/密钥/服务端错误）。"""
+        hits = keyword_match(_expand_colloquial(symptom))
         kb_text = "\n".join(
             f"- {h['department']}（{h['note']}）命中关键词：{'、'.join(h['matched'])}" for h in hits
         ) or "（知识库未直接命中，请依据医学知识判断）"
@@ -93,4 +108,8 @@ class CareMatcherChain:
             )),
         ]
         result = call_structured(self.llm, CareRecommendation, messages)
+        if result is None:
+            raise RuntimeError("结构化输出返回为空，请稍后重试或更换模型")
+        # 提示词里的"最多3个"对模型只是软约束，这里硬性截断
+        result.recommended_departments = result.recommended_departments[:3]
         return {"kb_hits": hits, "result": result}

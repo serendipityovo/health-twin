@@ -9,6 +9,7 @@ from typing import Dict, List, Optional
 import pandas as pd
 
 import config
+from twin.atomic import atomic_write
 
 # 指标定义：key -> (中文名, 单位, 正常参考范围)
 METRIC_TYPES: Dict[str, tuple] = {
@@ -37,9 +38,7 @@ class MetricStore:
         return []
 
     def _save_raw(self, rows: List[dict]) -> None:
-        self.path.write_text(
-            json.dumps(rows, ensure_ascii=False, indent=2), encoding="utf-8"
-        )
+        atomic_write(self.path, json.dumps(rows, ensure_ascii=False, indent=2))
 
     def add(self, metric: str, value: float, date: str = "", note: str = "") -> dict:
         if metric not in METRIC_TYPES:

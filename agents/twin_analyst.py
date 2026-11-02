@@ -14,6 +14,6 @@ class TwinAnalystChain:
         self.llm = llm
         self.chain = TWIN_PROMPT | llm | StrOutputParser()
 
-    def assess(self, max_records: int = 8) -> str:
+    def assess(self, max_records: int = 12) -> str:
         twin_context = build_twin_context(include_records=True, max_records=max_records)
         return self.chain.invoke({"twin_context": twin_context})
