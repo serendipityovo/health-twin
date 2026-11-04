@@ -249,6 +249,24 @@ def _():
         config.reload()
 
 
+@check("非法配置值不崩溃（TEMPERATURE=abc 等回退默认）")
+def _():
+    import config
+    old = config.ENV_PATH.read_text(encoding="utf-8") if config.ENV_PATH.exists() else ""
+    try:
+        config.ENV_PATH.write_text(
+            "TEMPERATURE=abc\nMAX_TOKENS=xyz\nREQUEST_TIMEOUT=NaN文字\nRETRIEVER_TOP_K=-\n",
+            encoding="utf-8")
+        config.reload()  # 不应抛异常
+        assert config.TEMPERATURE == 0.7, config.TEMPERATURE
+        assert config.MAX_TOKENS == 2048, config.MAX_TOKENS
+        assert config.REQUEST_TIMEOUT == 120, config.REQUEST_TIMEOUT
+        assert config.RETRIEVER_TOP_K == 4, config.RETRIEVER_TOP_K
+    finally:
+        config.ENV_PATH.write_text(old, encoding="utf-8")
+        config.reload()
+
+
 print("\n" + "=" * 50)
 if FAILED:
     print(f"[X] {len(FAILED)} 项失败：")

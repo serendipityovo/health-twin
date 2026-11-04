@@ -75,6 +75,14 @@ def _apply_env() -> None:
         v = os.environ.get(key) or file_env.get(key) or default
         return v.strip() if isinstance(v, str) else str(v).strip()
 
+    def num(key: str, default, caster=float):
+        """数值配置：非法值（如 TEMPERATURE=abc）安全回退默认值，不让应用启动崩溃。"""
+        raw = val(key, str(default)) or str(default)
+        try:
+            return caster(raw)
+        except (TypeError, ValueError):
+            return default
+
     DEEPSEEK_API_KEY = val("DEEPSEEK_API_KEY") or _embedded_key()
     ONLINE_BASE_URL = val("ONLINE_BASE_URL", "https://api.deepseek.com/v1")
     ONLINE_MODEL = val("ONLINE_MODEL", "deepseek-chat")
@@ -82,10 +90,10 @@ def _apply_env() -> None:
     OLLAMA_BASE_URL = val("OLLAMA_BASE_URL", "http://localhost:11434")
     OLLAMA_MODEL = val("OLLAMA_MODEL", "qwen2.5:7b")
     DEV_MODE = val("DEV_MODE").lower() in ("1", "true", "yes", "on")
-    TEMPERATURE = float(val("TEMPERATURE", "0.7") or 0.7)
-    MAX_TOKENS = int(val("MAX_TOKENS", "2048") or 2048)
-    REQUEST_TIMEOUT = int(val("REQUEST_TIMEOUT", "120") or 120)
-    RETRIEVER_TOP_K = int(val("RETRIEVER_TOP_K", "4") or 4)
+    TEMPERATURE = num("TEMPERATURE", 0.7, float)
+    MAX_TOKENS = num("MAX_TOKENS", 2048, int)
+    REQUEST_TIMEOUT = num("REQUEST_TIMEOUT", 120, int)
+    RETRIEVER_TOP_K = num("RETRIEVER_TOP_K", 4, int)
     _bypass_proxy_for_deepseek()
 
 
